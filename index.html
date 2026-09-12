@@ -1,0 +1,846 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Tool Crib — GT Field Services</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root{
+    --bg:#1B1E21;
+    --panel:#24282C;
+    --panel-raised:#2E3338;
+    --line:#3D4348;
+    --line-bright:#565D63;
+    --text:#ECE7DD;
+    --text-dim:#9AA0A6;
+    --accent:#E8862C;
+    --accent-dim:#8A5726;
+    --ok:#4FA8A3;
+    --ok-dim:#2E5F5C;
+    --danger:#C4472B;
+    --danger-dim:#5C2A1E;
+    --radius:3px;
+    --mono: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+    --sans: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --cond: "Arial Narrow", "Helvetica Neue Condensed", var(--sans);
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:var(--sans); min-height:100vh;
+  }
+  ::selection{ background:var(--accent-dim); }
+
+  /* ---------- Login ---------- */
+  #screen-login{
+    min-height:100vh; display:flex; align-items:center; justify-content:center;
+    background:
+      linear-gradient(180deg, var(--bg), #16181A);
+    padding:24px;
+  }
+  .login-card{
+    width:100%; max-width:400px; background:var(--panel);
+    border:1px solid var(--line); border-radius:var(--radius);
+    padding:32px 28px;
+  }
+  .login-tag{
+    font-family:var(--mono); font-size:11px; color:var(--accent);
+    letter-spacing:0.08em; margin-bottom:6px;
+  }
+  .login-title{
+    font-family:var(--cond); font-weight:700; font-size:28px;
+    letter-spacing:0.01em; margin:0 0 4px 0; line-height:1.1;
+  }
+  .login-sub{ color:var(--text-dim); font-size:13.5px; margin-bottom:22px; }
+  .people-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(105px,1fr)); gap:8px; margin-bottom:6px; }
+  .person-btn{
+    padding:14px 6px; text-align:center; background:var(--panel-raised); border:1px solid var(--line);
+    border-radius:var(--radius); cursor:pointer; font-size:13px;
+  }
+  .person-btn:hover{ border-color:var(--accent); }
+  .back-link{ font-size:12px; color:var(--text-dim); cursor:pointer; margin-bottom:16px; display:inline-block; }
+  .back-link:hover{ color:var(--text); }
+  .pin-person-name{ text-align:center; font-size:15px; margin-bottom:4px; }
+  .pin-dots{ display:flex; gap:10px; justify-content:center; margin:16px 0 20px 0; }
+  .pin-dot{ width:13px; height:13px; border-radius:50%; border:1px solid var(--line-bright); }
+  .pin-dot.filled{ background:var(--accent); border-color:var(--accent); }
+  .pin-keys{ display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+  .pin-key{
+    padding:15px 0; text-align:center; background:var(--panel-raised); border:1px solid var(--line);
+    border-radius:var(--radius); font-size:16px; cursor:pointer; user-select:none;
+  }
+  .pin-key:hover{ border-color:var(--text-dim); }
+  .field{ margin-bottom:14px; }
+  .field label{ display:block; font-size:12px; color:var(--text-dim); margin-bottom:5px; }
+  .field input, .field select{
+    width:100%; padding:9px 10px; background:var(--bg); border:1px solid var(--line);
+    border-radius:var(--radius); color:var(--text); font-size:14px; font-family:var(--sans);
+  }
+  .field input:focus, .field select:focus{ outline:none; border-color:var(--accent); }
+  .hint{ font-size:11.5px; color:var(--text-dim); margin-top:5px; font-family:var(--mono); }
+  .btn{
+    padding:10px 16px; border-radius:var(--radius); border:1px solid var(--line-bright);
+    background:var(--panel-raised); color:var(--text); font-size:13.5px; cursor:pointer;
+    font-family:var(--sans);
+  }
+  .btn:hover{ border-color:var(--text-dim); }
+  .btn-primary{ background:var(--accent); border-color:var(--accent); color:#1B1200; font-weight:600; }
+  .btn-primary:hover{ background:#F0913C; border-color:#F0913C; }
+  .btn-primary:disabled{ opacity:0.4; cursor:not-allowed; }
+  .btn-full{ width:100%; margin-top:6px; }
+  .err{ color:var(--danger); font-size:12.5px; margin-top:8px; min-height:16px; }
+
+  /* ---------- App shell ---------- */
+  #screen-app{ display:none; min-height:100vh; }
+  header{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:14px 22px; background:var(--panel); border-bottom:1px solid var(--line);
+    flex-wrap:wrap; gap:10px;
+  }
+  .brand{ display:flex; align-items:baseline; gap:10px; }
+  .brand-mark{
+    font-family:var(--mono); font-size:11px; color:var(--accent); letter-spacing:0.08em;
+    border:1px solid var(--accent-dim); padding:3px 6px; border-radius:var(--radius);
+  }
+  .brand-title{ font-family:var(--cond); font-weight:700; font-size:19px; }
+  .user-chip{ display:flex; align-items:center; gap:10px; }
+  .user-name{ font-size:13.5px; }
+  .role-badge{
+    font-family:var(--mono); font-size:10px; letter-spacing:0.06em; padding:2px 6px;
+    border-radius:var(--radius); border:1px solid var(--line-bright); color:var(--text-dim);
+  }
+  .role-badge.admin{ color:var(--accent); border-color:var(--accent-dim); }
+
+  nav{ display:flex; gap:2px; padding:0 22px; background:var(--panel); border-bottom:1px solid var(--line); }
+  .tab{
+    padding:11px 16px; font-size:13.5px; color:var(--text-dim); cursor:pointer;
+    border-bottom:2px solid transparent; font-family:var(--sans);
+  }
+  .tab.active{ color:var(--text); border-bottom-color:var(--accent); }
+
+  main{ padding:22px; max-width:1180px; margin:0 auto; }
+  .view{ display:none; }
+  .view.active{ display:block; }
+
+  .search-row{ display:flex; gap:10px; margin-bottom:20px; }
+  .search-row input{
+    flex:1; padding:11px 14px; background:var(--panel); border:1px solid var(--line);
+    border-radius:var(--radius); color:var(--text); font-size:14px;
+  }
+  .search-row input:focus{ outline:none; border-color:var(--accent); }
+
+  .legend{ display:flex; gap:18px; margin-bottom:18px; flex-wrap:wrap; }
+  .legend-item{ display:flex; align-items:center; gap:6px; font-size:12px; color:var(--text-dim); }
+  .dot{ width:8px; height:8px; border-radius:50%; display:inline-block; }
+  .dot.ok{ background:var(--ok); }
+  .dot.out{ background:var(--accent); }
+  .dot.overdue{ background:var(--danger); }
+  .dot.empty{ background:transparent; border:1px dashed var(--line-bright); }
+
+  .shelves{ display:grid; grid-template-columns:1fr 1fr; gap:24px; }
+  @media(max-width:820px){ .shelves{ grid-template-columns:1fr; } }
+  .shelf-unit-label{
+    font-family:var(--mono); font-size:11px; letter-spacing:0.08em; color:var(--text-dim);
+    margin-bottom:8px; padding-bottom:6px; border-bottom:1px solid var(--line);
+  }
+  .level-row{ margin-bottom:8px; }
+  .level-label{ font-family:var(--mono); font-size:10px; color:var(--text-dim); margin-bottom:4px; }
+  .slot-row{ display:grid; grid-template-columns:repeat(6,1fr); gap:6px; }
+  .slot{
+    border:1px solid var(--line); border-radius:var(--radius); background:var(--panel);
+    padding:7px 6px; min-height:56px; cursor:default; position:relative;
+    display:flex; flex-direction:column; justify-content:space-between; transition:border-color 0.12s, background 0.12s;
+  }
+  .slot.filled{ cursor:pointer; }
+  .slot.filled:hover{ border-color:var(--line-bright); background:var(--panel-raised); }
+  .slot.match{ border-color:var(--accent); box-shadow:0 0 0 1px var(--accent) inset; }
+  .slot.dimmed{ opacity:0.28; }
+  .slot-code{ font-family:var(--mono); font-size:9.5px; color:var(--text-dim); }
+  .slot-name{ font-size:11px; line-height:1.25; margin-top:2px; }
+  .slot-status{ display:flex; align-items:center; gap:4px; margin-top:4px; }
+  .slot-status .dot{ width:6px; height:6px; }
+
+  .empty-note{ color:var(--text-dim); font-size:12.5px; text-align:center; padding:40px 0; }
+
+  /* ---------- Modal ---------- */
+  .overlay{
+    display:none; position:fixed; inset:0; background:rgba(10,11,12,0.6);
+    align-items:center; justify-content:center; padding:20px; z-index:50;
+  }
+  .overlay.active{ display:flex; }
+  .modal{
+    width:100%; max-width:420px; background:var(--panel); border:1px solid var(--line-bright);
+    border-radius:var(--radius); padding:22px; max-height:88vh; overflow-y:auto;
+  }
+  .modal-top{ display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:4px; }
+  .modal-tag{ font-family:var(--mono); font-size:11px; color:var(--text-dim); }
+  .modal-close{ background:none; border:none; color:var(--text-dim); cursor:pointer; font-size:18px; line-height:1; }
+  .modal-title{ font-family:var(--cond); font-weight:700; font-size:20px; margin:6px 0 14px 0; }
+  .modal-row{ display:flex; justify-content:space-between; font-size:13px; padding:7px 0; border-bottom:1px solid var(--line); }
+  .modal-row span:first-child{ color:var(--text-dim); }
+  .status-pill{
+    display:inline-block; padding:2px 8px; border-radius:20px; font-size:11px; font-family:var(--mono);
+  }
+  .status-pill.ok{ background:var(--ok-dim); color:var(--ok); }
+  .status-pill.out{ background:var(--accent-dim); color:var(--accent); }
+  .status-pill.overdue{ background:var(--danger-dim); color:#F0917F; }
+  .modal-actions{ margin-top:18px; }
+  .modal-note{ font-size:12px; color:var(--text-dim); margin-top:10px; }
+
+  /* ---------- Logbook ---------- */
+  table{ width:100%; border-collapse:collapse; font-size:13px; }
+  th{
+    text-align:left; font-family:var(--mono); font-size:10.5px; letter-spacing:0.05em;
+    color:var(--text-dim); padding:8px 10px; border-bottom:1px solid var(--line-bright); font-weight:400;
+  }
+  td{ padding:9px 10px; border-bottom:1px solid var(--line); vertical-align:top; }
+  tr:hover td{ background:var(--panel-raised); }
+  .action-tag{ font-family:var(--mono); font-size:10.5px; padding:2px 6px; border-radius:var(--radius); }
+  .action-tag.checkout{ background:var(--accent-dim); color:var(--accent); }
+  .action-tag.checkin{ background:var(--ok-dim); color:var(--ok); }
+
+  /* ---------- Admin ---------- */
+  .admin-section{ background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:18px; margin-bottom:18px; }
+  .admin-section h3{ font-family:var(--cond); font-size:16px; margin:0 0 14px 0; font-weight:700; }
+  .form-grid{ display:grid; grid-template-columns:2fr 1fr 1fr 1fr 1fr auto; gap:8px; align-items:end; }
+  @media(max-width:900px){ .form-grid{ grid-template-columns:1fr 1fr; } }
+  .form-grid .field{ margin-bottom:0; }
+  .admin-row-actions{ display:flex; gap:6px; }
+  .btn-sm{ padding:5px 9px; font-size:12px; }
+  .btn-danger{ border-color:var(--danger); color:var(--danger); background:transparent; }
+  .btn-danger:hover{ background:var(--danger-dim); }
+  .small-input{ width:100%; padding:6px 8px; background:var(--bg); border:1px solid var(--line); border-radius:var(--radius); color:var(--text); font-size:13px; }
+  .msg{ font-size:12.5px; margin-top:10px; }
+  .msg.error{ color:var(--danger); }
+  .msg.success{ color:var(--ok); }
+</style>
+</head>
+<body>
+
+<!-- ===================== LOGIN ===================== -->
+<div id="screen-login">
+  <div class="login-card">
+    <div class="login-tag">GT FIELD SERVICES</div>
+    <h1 class="login-title">Tool Crib</h1>
+    <div class="login-sub" id="login-sub-text">Tap your name to sign in.</div>
+
+    <div id="login-step-1">
+      <div class="people-grid" id="people-grid"></div>
+      <div class="err" id="people-err"></div>
+    </div>
+
+    <div id="login-step-2" style="display:none;">
+      <div class="back-link" onclick="backToNames()">← choose a different name</div>
+      <div class="pin-person-name" id="pin-person-name"></div>
+      <div class="pin-dots" id="pin-dots">
+        <div class="pin-dot"></div><div class="pin-dot"></div><div class="pin-dot"></div><div class="pin-dot"></div>
+      </div>
+      <div class="pin-keys">
+        <div class="pin-key" onclick="pinPress('1')">1</div>
+        <div class="pin-key" onclick="pinPress('2')">2</div>
+        <div class="pin-key" onclick="pinPress('3')">3</div>
+        <div class="pin-key" onclick="pinPress('4')">4</div>
+        <div class="pin-key" onclick="pinPress('5')">5</div>
+        <div class="pin-key" onclick="pinPress('6')">6</div>
+        <div class="pin-key" onclick="pinPress('7')">7</div>
+        <div class="pin-key" onclick="pinPress('8')">8</div>
+        <div class="pin-key" onclick="pinPress('9')">9</div>
+        <div class="pin-key" onclick="pinBackspace()">⌫</div>
+        <div class="pin-key" onclick="pinPress('0')">0</div>
+        <div class="pin-key" style="visibility:hidden;"></div>
+      </div>
+      <div class="err" id="login-err" style="text-align:center;"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== APP ===================== -->
+<div id="screen-app">
+  <header>
+    <div class="brand">
+      <div class="brand-mark">GT-FS</div>
+      <div class="brand-title">Tool Crib</div>
+    </div>
+    <div class="user-chip">
+      <span class="user-name" id="hdr-username"></span>
+      <span class="role-badge" id="hdr-role"></span>
+      <button class="btn btn-sm" onclick="refreshAll()">⟳ Refresh</button>
+      <button class="btn btn-sm" onclick="logout()">Switch user</button>
+    </div>
+  </header>
+
+  <nav>
+    <div class="tab active" data-view="map" onclick="switchTab('map')">Shelf Map</div>
+    <div class="tab" data-view="logbook" onclick="switchTab('logbook')">Logbook</div>
+    <div class="tab" id="tab-admin" style="display:none;" data-view="admin" onclick="switchTab('admin')">Admin</div>
+  </nav>
+
+  <main>
+    <!-- Shelf map view -->
+    <div class="view active" id="view-map">
+      <div class="search-row">
+        <input id="search-input" type="text" placeholder="Search by tool name or tag number…" oninput="renderShelves()">
+      </div>
+      <div class="legend">
+        <div class="legend-item"><span class="dot ok"></span> Available</div>
+        <div class="legend-item"><span class="dot out"></span> Checked out</div>
+        <div class="legend-item"><span class="dot overdue"></span> Overdue</div>
+        <div class="legend-item"><span class="dot empty"></span> Empty slot</div>
+      </div>
+      <div class="shelves">
+        <div>
+          <div class="shelf-unit-label">LEFT SHELF — UNIT L</div>
+          <div id="shelf-L"></div>
+        </div>
+        <div>
+          <div class="shelf-unit-label">RIGHT SHELF — UNIT R</div>
+          <div id="shelf-R"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Logbook view -->
+    <div class="view" id="view-logbook">
+      <table>
+        <thead>
+          <tr><th>When</th><th>Tool</th><th>Action</th><th>By</th><th>Expected return</th></tr>
+        </thead>
+        <tbody id="logbook-body"></tbody>
+      </table>
+      <div class="empty-note" id="logbook-empty" style="display:none;">No activity logged yet.</div>
+    </div>
+
+    <!-- Admin view -->
+    <div class="view" id="view-admin">
+      <div class="admin-section">
+        <h3>Add a person</h3>
+        <div class="form-grid" style="grid-template-columns:2fr 1fr 1fr auto;">
+          <div class="field"><label>Name</label><input class="small-input" id="add-person-name" type="text"></div>
+          <div class="field"><label>4-digit PIN</label><input class="small-input" id="add-person-pin" type="text" maxlength="4" inputmode="numeric" placeholder="e.g. 4821"></div>
+          <div class="field"><label>Role</label>
+            <select class="small-input" id="add-person-role"><option value="employee">Field employee</option><option value="admin">Admin</option></select>
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="adminAddPerson()">Add</button>
+        </div>
+        <div class="msg" id="add-person-msg"></div>
+      </div>
+
+      <div class="admin-section">
+        <h3>People (<span id="people-count">0</span>)</h3>
+        <table>
+          <thead><tr><th>Name</th><th>Role</th><th></th></tr></thead>
+          <tbody id="people-body"></tbody>
+        </table>
+      </div>
+
+      <div class="admin-section">
+        <h3>Add a tool</h3>
+        <div class="form-grid">
+          <div class="field"><label>Name</label><input class="small-input" id="add-name" type="text"></div>
+          <div class="field"><label>Tag # (optional)</label><input class="small-input" id="add-tag" type="text"></div>
+          <div class="field"><label>Shelf</label>
+            <select class="small-input" id="add-side"><option value="L">Left</option><option value="R">Right</option></select>
+          </div>
+          <div class="field"><label>Level</label>
+            <select class="small-input" id="add-level"><option>4</option><option>3</option><option>2</option><option>1</option></select>
+          </div>
+          <div class="field"><label>Slot (1–6)</label><input class="small-input" id="add-slot" type="number" min="1" max="6"></div>
+          <button class="btn btn-primary btn-sm" onclick="adminAddTool()">Add</button>
+        </div>
+        <div class="form-grid" style="grid-template-columns:2fr 1fr 1fr; margin-top:10px;">
+          <div class="field"><label>Description (optional)</label><input class="small-input" id="add-description" type="text" placeholder="e.g. calibrated annually, serial #..."></div>
+          <div class="field"><label>Price (optional)</label><input class="small-input" id="add-price" type="number" step="0.01" placeholder="e.g. 12500"></div>
+          <div class="field"><label>Acquired date (optional)</label><input class="small-input" id="add-acquired" type="date"></div>
+        </div>
+        <div class="msg" id="add-msg"></div>
+      </div>
+
+      <div class="admin-section">
+        <h3>Inventory (<span id="inv-count">0</span> tools)</h3>
+        <div style="font-size:12px;color:var(--text-dim);margin-bottom:10px;">Price and acquisition date are only ever shown to admins — field employees never see them, even in the app's own data requests.</div>
+        <table>
+          <thead>
+            <tr><th>Name</th><th>Tag</th><th>Location</th><th>Status</th><th>Price</th><th>Acquired</th><th></th></tr>
+          </thead>
+          <tbody id="admin-body"></tbody>
+        </table>
+      </div>
+
+      <div class="admin-section">
+        <h3>Demo data</h3>
+        <div style="font-size:12.5px;color:var(--text-dim);margin-bottom:10px;">Restore the original 10 sample tools and clear the logbook. This affects everyone using this app.</div>
+        <button class="btn btn-danger btn-sm" id="reset-btn" onclick="confirmReset()">Reset demo data</button>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- ===================== TOOL MODAL ===================== -->
+<div class="overlay" id="overlay">
+  <div class="modal" id="modal-body"></div>
+</div>
+
+<script>
+/* ---------------- Config ---------------- */
+const SUPABASE_URL = 'https://sexwlyxnuznatzteljxk.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNleHdseXhudXpuYXR6dGVqbHhrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg5OTAxNzYsImV4cCI6MjEwNDU2NjE3Nn0.qiP0xTjiQdwqPyN1VdGcdJlNFd1oc7cyG2E7_Q-vgvc';
+const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+/* ---------------- State ---------------- */
+let currentUser = null;   // {id, name, role}
+let sessionToken = null;  // issued by the database at login; required for every data call
+let peopleList = [];
+let selectedPersonName = null;
+let pinBuffer = '';
+let peopleDeleteArmed = new Set();
+let tools = [];
+let logbook = [];
+let activeToolId = null;
+let resetArmed = false;
+let deleteArmed = new Set();
+let pollHandle = null;
+
+function todayIso(){ return new Date().toISOString().slice(0,10); }
+function escapeHtml(s){ const d=document.createElement('div'); d.textContent=s||''; return d.innerHTML; }
+function money(n){ return n===null || n===undefined ? '' : Number(n).toLocaleString(undefined,{style:'currency',currency:'USD'}); }
+
+/* ---------------- DB <-> app mapping (tools come back from list_tools RPC) ---------------- */
+function fromDbTool(r){
+  const t = { id:r.id, name:r.name, tag:r.tag||'', side:r.side, level:r.level, slot:r.slot, status:r.status,
+              description:r.description||'', price:r.price, acquiredDate:r.acquired_date||'' };
+  if(r.checked_out_by) t.checkedOutBy = r.checked_out_by;
+  if(r.checked_out_date) t.checkedOutDate = r.checked_out_date;
+  if(r.expected_return) t.expectedReturn = r.expected_return;
+  return t;
+}
+function fromDbLog(r){
+  return { id:r.id, toolId:r.tool_id, toolName:r.tool_name, action:r.action, user:r.user_name,
+           timestamp:r.logged_at, expectedReturn:r.expected_return||'' };
+}
+
+/* ---------------- Remote data (all gated by sessionToken) ---------------- */
+async function loadData(){
+  const [{ data: toolRows }, { data: logRows }] = await Promise.all([
+    supabaseClient.rpc('list_tools', { p_token: sessionToken }),
+    supabaseClient.rpc('list_logbook', { p_token: sessionToken })
+  ]);
+  tools = (toolRows || []).map(fromDbTool);
+  logbook = (logRows || []).map(fromDbLog);
+}
+
+async function refreshAll(){
+  if(!currentUser) return;
+  await loadData();
+  renderShelves();
+  const activeView = document.querySelector('.view.active').id;
+  if(activeView === 'view-logbook') renderLogbook();
+  if(activeView === 'view-admin'){ renderAdmin(); await loadPeopleAdmin(); }
+}
+
+/* ---------------- Login (name grid + PIN, verified in the database) ---------------- */
+async function initLogin(){
+  const { data } = await supabaseClient.rpc('list_people');
+  peopleList = data || [];
+  renderPeopleGrid();
+}
+
+function renderPeopleGrid(){
+  const grid = document.getElementById('people-grid');
+  const errEl = document.getElementById('people-err');
+  grid.innerHTML = ''; errEl.textContent = '';
+  if(!peopleList || peopleList.length===0){
+    errEl.textContent = 'No one is set up yet — run the SQL setup script in Supabase to add the first admin.';
+    return;
+  }
+  peopleList.forEach(p=>{
+    const el = document.createElement('div');
+    el.className = 'person-btn';
+    el.textContent = p.name;
+    el.onclick = () => selectPerson(p.name);
+    grid.appendChild(el);
+  });
+}
+
+function selectPerson(name){
+  selectedPersonName = name; pinBuffer = '';
+  document.getElementById('login-step-1').style.display = 'none';
+  document.getElementById('login-step-2').style.display = 'block';
+  document.getElementById('pin-person-name').textContent = name;
+  document.getElementById('login-err').textContent = '';
+  updatePinDots();
+}
+function backToNames(){
+  document.getElementById('login-step-1').style.display = 'block';
+  document.getElementById('login-step-2').style.display = 'none';
+  pinBuffer = ''; selectedPersonName = null;
+}
+function updatePinDots(){
+  document.querySelectorAll('#pin-dots .pin-dot').forEach((d,i)=> d.classList.toggle('filled', i < pinBuffer.length));
+}
+function pinPress(d){
+  if(pinBuffer.length >= 4) return;
+  pinBuffer += d;
+  updatePinDots();
+  if(pinBuffer.length === 4) submitPin();
+}
+function pinBackspace(){ pinBuffer = pinBuffer.slice(0,-1); updatePinDots(); }
+
+async function submitPin(){
+  const errEl = document.getElementById('login-err');
+  errEl.textContent = '';
+  const { data, error } = await supabaseClient.rpc('login', { p_name: selectedPersonName, p_pin: pinBuffer });
+  if(error || !data || data.length===0){
+    errEl.textContent = 'Incorrect PIN. Try again.';
+    pinBuffer = ''; updatePinDots();
+    return;
+  }
+  const session = data[0];
+  sessionToken = session.token;
+  currentUser = { name: session.name, role: session.role };
+  await enterApp();
+}
+
+async function enterApp(){
+  await loadData();
+  document.getElementById('screen-login').style.display = 'none';
+  document.getElementById('screen-app').style.display = 'block';
+  document.getElementById('hdr-username').textContent = currentUser.name;
+  document.getElementById('hdr-role').textContent = currentUser.role === 'admin' ? 'ADMIN' : 'FIELD';
+  document.getElementById('hdr-role').classList.toggle('admin', currentUser.role==='admin');
+  document.getElementById('tab-admin').style.display = currentUser.role==='admin' ? 'block' : 'none';
+  renderShelves();
+  renderLogbook();
+  if(currentUser.role==='admin'){ renderAdmin(); await loadPeopleAdmin(); }
+
+  if(pollHandle) clearInterval(pollHandle);
+  pollHandle = setInterval(()=>{ if(!document.getElementById('overlay').classList.contains('active')) refreshAll(); }, 15000);
+}
+
+async function logout(){
+  if(sessionToken){ supabaseClient.rpc('logout', { p_token: sessionToken }); }
+  currentUser = null; sessionToken = null;
+  if(pollHandle) clearInterval(pollHandle);
+  document.getElementById('screen-app').style.display = 'none';
+  document.getElementById('screen-login').style.display = 'flex';
+  backToNames();
+  initLogin();
+  switchTab('map');
+}
+
+/* ---------------- Tabs ---------------- */
+function switchTab(view){
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.view===view));
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.getElementById('view-'+view).classList.add('active');
+  if(view==='logbook') renderLogbook();
+  if(view==='admin'){ renderAdmin(); loadPeopleAdmin(); }
+}
+
+/* ---------------- Shelf map ---------------- */
+function isOverdue(tool){
+  return tool.status==='checked_out' && tool.expectedReturn && tool.expectedReturn < todayIso();
+}
+function renderShelves(){
+  const q = document.getElementById('search-input').value.trim().toLowerCase();
+  renderShelfUnit('L', q);
+  renderShelfUnit('R', q);
+}
+function renderShelfUnit(side, q){
+  const container = document.getElementById('shelf-'+side);
+  container.innerHTML = '';
+  for(let level=4; level>=1; level--){
+    const row = document.createElement('div');
+    row.className = 'level-row';
+    const label = document.createElement('div');
+    label.className = 'level-label';
+    label.textContent = 'LEVEL ' + level;
+    row.appendChild(label);
+    const slotRow = document.createElement('div');
+    slotRow.className = 'slot-row';
+    for(let slot=1; slot<=6; slot++){
+      const tool = tools.find(t => t.side===side && t.level===level && t.slot===slot);
+      slotRow.appendChild(buildSlotEl(side, level, slot, tool, q));
+    }
+    row.appendChild(slotRow);
+    container.appendChild(row);
+  }
+}
+function buildSlotEl(side, level, slot, tool, q){
+  const el = document.createElement('div');
+  el.className = 'slot';
+  const code = side + level + '-' + slot;
+  if(!tool){
+    el.innerHTML = '<div class="slot-code">'+code+'</div><div class="slot-status"><span class="dot empty"></span></div>';
+    if(q) el.classList.add('dimmed');
+    return el;
+  }
+  el.classList.add('filled');
+  const matches = q && (tool.name.toLowerCase().includes(q) || (tool.tag||'').toLowerCase().includes(q));
+  if(q && matches) el.classList.add('match');
+  else if(q && !matches) el.classList.add('dimmed');
+
+  let dotClass = 'ok', label = 'Available';
+  if(tool.status==='checked_out'){
+    dotClass = isOverdue(tool) ? 'overdue' : 'out';
+    label = isOverdue(tool) ? 'Overdue' : 'Checked out';
+  }
+  el.innerHTML = `
+    <div class="slot-code">${code}${tool.tag ? ' · '+tool.tag : ''}</div>
+    <div class="slot-name">${escapeHtml(tool.name)}</div>
+    <div class="slot-status"><span class="dot ${dotClass}"></span><span style="font-size:9.5px;color:var(--text-dim);">${label}</span></div>
+  `;
+  el.onclick = () => openTool(tool.id);
+  return el;
+}
+
+/* ---------------- Tool modal ---------------- */
+function openTool(id){ activeToolId = id; renderModal(); document.getElementById('overlay').classList.add('active'); }
+function closeModal(){ document.getElementById('overlay').classList.remove('active'); activeToolId = null; }
+
+function renderModal(){
+  const tool = tools.find(t => t.id===activeToolId);
+  if(!tool) return;
+  const modal = document.getElementById('modal-body');
+  const code = tool.side + tool.level + '-' + tool.slot;
+  const overdue = isOverdue(tool);
+
+  let statusHtml, actionHtml = '';
+  if(tool.status === 'available'){
+    statusHtml = '<span class="status-pill ok">Available</span>';
+    actionHtml = `
+      <div class="field"><label>Expected return date</label><input class="small-input" id="return-date" type="date" min="${todayIso()}"></div>
+      <button class="btn btn-primary btn-full" onclick="doCheckout()">Check out to ${escapeHtml(currentUser.name)}</button>
+      <div class="msg error" id="modal-msg"></div>
+    `;
+  } else {
+    statusHtml = overdue ? '<span class="status-pill overdue">Overdue</span>' : '<span class="status-pill out">Checked out</span>';
+    const canCheckIn = currentUser.role==='admin' || tool.checkedOutBy===currentUser.name;
+    actionHtml = canCheckIn
+      ? `<button class="btn btn-primary btn-full" onclick="doCheckin()">Check in</button>`
+      : `<div class="modal-note">Held by ${escapeHtml(tool.checkedOutBy)}. Ask them or an admin to check it in.</div>`;
+  }
+
+  const adminExtras = currentUser.role==='admin' ? `
+    ${tool.price!==null && tool.price!==undefined ? `<div class="modal-row"><span>Price</span><span>${money(tool.price)}</span></div>` : ''}
+    ${tool.acquiredDate ? `<div class="modal-row"><span>Acquired</span><span>${tool.acquiredDate}</span></div>` : ''}
+  ` : '';
+
+  modal.innerHTML = `
+    <div class="modal-top">
+      <div class="modal-tag">${code}${tool.tag ? ' · '+tool.tag : ' · general tool'}</div>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-title">${escapeHtml(tool.name)}</div>
+    ${tool.description ? `<div class="modal-note" style="margin-top:-8px;margin-bottom:12px;">${escapeHtml(tool.description)}</div>` : ''}
+    <div class="modal-row"><span>Status</span><span>${statusHtml}</span></div>
+    <div class="modal-row"><span>Shelf location</span><span>${tool.side==='L'?'Left':'Right'} shelf, level ${tool.level}, slot ${tool.slot}</span></div>
+    ${tool.status==='checked_out' ? `
+      <div class="modal-row"><span>Checked out by</span><span>${escapeHtml(tool.checkedOutBy)}</span></div>
+      <div class="modal-row"><span>Checked out on</span><span>${tool.checkedOutDate}</span></div>
+      <div class="modal-row"><span>Expected return</span><span>${tool.expectedReturn || '—'}</span></div>
+    ` : ''}
+    ${adminExtras}
+    <div class="modal-actions">${actionHtml}</div>
+  `;
+}
+
+async function doCheckout(){
+  const dateInput = document.getElementById('return-date');
+  const msg = document.getElementById('modal-msg');
+  if(!dateInput.value){ msg.textContent = 'Set an expected return date.'; return; }
+  const { error } = await supabaseClient.rpc('checkout_tool', { p_token: sessionToken, p_tool_id: activeToolId, p_expected_return: dateInput.value });
+  if(error){ msg.textContent = 'Could not check out — someone may have just taken it. Refreshing…'; await refreshAll(); return; }
+  await loadData();
+  renderShelves();
+  closeModal();
+}
+
+async function doCheckin(){
+  const { error } = await supabaseClient.rpc('checkin_tool', { p_token: sessionToken, p_tool_id: activeToolId });
+  if(error){ await refreshAll(); closeModal(); return; }
+  await loadData();
+  renderShelves();
+  closeModal();
+}
+
+/* ---------------- Logbook ---------------- */
+function renderLogbook(){
+  const body = document.getElementById('logbook-body');
+  body.innerHTML = '';
+  document.getElementById('logbook-empty').style.display = logbook.length ? 'none' : 'block';
+  logbook.forEach(entry => {
+    const tr = document.createElement('tr');
+    const when = new Date(entry.timestamp);
+    const whenStr = isNaN(when) ? entry.timestamp : when.toLocaleString();
+    tr.innerHTML = `
+      <td>${whenStr}</td>
+      <td>${escapeHtml(entry.toolName)}</td>
+      <td><span class="action-tag ${entry.action}">${entry.action==='checkout'?'CHECK OUT':'CHECK IN'}</span></td>
+      <td>${escapeHtml(entry.user)}</td>
+      <td>${entry.expectedReturn || '—'}</td>
+    `;
+    body.appendChild(tr);
+  });
+}
+
+/* ---------------- Admin: tools ---------------- */
+function renderAdmin(){
+  document.getElementById('inv-count').textContent = tools.length;
+  const body = document.getElementById('admin-body');
+  body.innerHTML = '';
+  tools.slice().sort((a,b)=>a.name.localeCompare(b.name)).forEach(tool => {
+    const tr = document.createElement('tr');
+    const code = tool.side + tool.level + '-' + tool.slot;
+    const statusLabel = tool.status==='available' ? 'Available' : ('Out — ' + tool.checkedOutBy);
+    const armed = deleteArmed.has(tool.id);
+    tr.innerHTML = `
+      <td>${escapeHtml(tool.name)}</td>
+      <td>${tool.tag || '—'}</td>
+      <td>${code}</td>
+      <td>${statusLabel}</td>
+      <td>${money(tool.price) || '—'}</td>
+      <td>${tool.acquiredDate || '—'}</td>
+      <td class="admin-row-actions">
+        <button class="btn btn-sm" onclick="editLocation('${tool.id}')">Move</button>
+        <button class="btn btn-sm btn-danger" onclick="${armed ? `deleteToolConfirm('${tool.id}')` : `armDelete('${tool.id}')`}">${armed ? 'Confirm delete?' : 'Delete'}</button>
+      </td>
+    `;
+    body.appendChild(tr);
+  });
+}
+function armDelete(id){
+  deleteArmed.add(id); renderAdmin();
+  setTimeout(()=>{ deleteArmed.delete(id); renderAdmin(); }, 4000);
+}
+async function deleteToolConfirm(id){
+  deleteArmed.delete(id);
+  await supabaseClient.rpc('admin_delete_tool', { p_token: sessionToken, p_tool_id: id });
+  await loadData();
+  renderAdmin(); renderShelves();
+}
+async function editLocation(id){
+  const tool = tools.find(t=>t.id===id);
+  const newSide = prompt('Shelf side (L or R):', tool.side);
+  if(newSide===null) return;
+  const newLevel = prompt('Level (1-4):', tool.level);
+  if(newLevel===null) return;
+  const newSlot = prompt('Slot (1-6):', tool.slot);
+  if(newSlot===null) return;
+  const side = newSide.trim().toUpperCase();
+  const level = parseInt(newLevel,10), slot = parseInt(newSlot,10);
+  if(!['L','R'].includes(side) || ![1,2,3,4].includes(level) || slot<1 || slot>6) return;
+  const occupied = tools.find(t=>t.id!==id && t.side===side && t.level===level && t.slot===slot);
+  if(occupied) return;
+  await supabaseClient.rpc('admin_move_tool', { p_token: sessionToken, p_tool_id: id, p_side: side, p_level: level, p_slot: slot });
+  await loadData();
+  renderAdmin(); renderShelves();
+}
+async function adminAddTool(){
+  const name = document.getElementById('add-name').value.trim();
+  const tag = document.getElementById('add-tag').value.trim();
+  const side = document.getElementById('add-side').value;
+  const level = parseInt(document.getElementById('add-level').value,10);
+  const slot = parseInt(document.getElementById('add-slot').value,10);
+  const description = document.getElementById('add-description').value.trim();
+  const priceRaw = document.getElementById('add-price').value.trim();
+  const price = priceRaw === '' ? null : parseFloat(priceRaw);
+  const acquired = document.getElementById('add-acquired').value;
+  const msg = document.getElementById('add-msg');
+  msg.className = 'msg error';
+  if(!name){ msg.textContent = 'Tool name is required.'; return; }
+  if(!slot || slot<1 || slot>6){ msg.textContent = 'Slot must be between 1 and 6.'; return; }
+  const occupied = tools.find(t=>t.side===side && t.level===level && t.slot===slot);
+  if(occupied){ msg.textContent = `Slot ${side}${level}-${slot} is already used by "${occupied.name}".`; return; }
+  const { error } = await supabaseClient.rpc('admin_add_tool', {
+    p_token: sessionToken, p_name: name, p_tag: tag, p_side: side, p_level: level, p_slot: slot,
+    p_description: description, p_price: price, p_acquired_date: acquired
+  });
+  if(error){ msg.textContent = 'Could not add tool.'; return; }
+  msg.className = 'msg success';
+  msg.textContent = `Added "${name}" at ${side}${level}-${slot}.`;
+  ['add-name','add-tag','add-slot','add-description','add-price','add-acquired'].forEach(id=>document.getElementById(id).value='');
+  await loadData();
+  renderAdmin(); renderShelves();
+}
+function confirmReset(){
+  const btn = document.getElementById('reset-btn');
+  if(!resetArmed){
+    resetArmed = true;
+    btn.textContent = 'Click again to confirm reset';
+    setTimeout(()=>{ resetArmed=false; btn.textContent='Reset demo data'; }, 4000);
+    return;
+  }
+  resetArmed = false;
+  btn.textContent = 'Reset demo data';
+  doReset();
+}
+async function doReset(){
+  await supabaseClient.rpc('admin_reset_demo', { p_token: sessionToken });
+  await loadData();
+  renderAdmin(); renderShelves(); renderLogbook();
+}
+
+/* ---------------- Admin: people ---------------- */
+async function loadPeopleAdmin(){
+  const { data } = await supabaseClient.rpc('list_people');
+  peopleList = data || [];
+  renderPeopleAdmin();
+}
+function renderPeopleAdmin(){
+  document.getElementById('people-count').textContent = peopleList.length;
+  const body = document.getElementById('people-body');
+  body.innerHTML = '';
+  peopleList.slice().sort((a,b)=>a.name.localeCompare(b.name)).forEach(p=>{
+    const tr = document.createElement('tr');
+    const armed = peopleDeleteArmed.has(p.id);
+    tr.innerHTML = `
+      <td>${escapeHtml(p.name)}</td>
+      <td>${p.role==='admin' ? 'Admin' : 'Field employee'}</td>
+      <td class="admin-row-actions">
+        <button class="btn btn-sm" onclick="promptResetPin('${p.id}','${escapeHtml(p.name)}')">Reset PIN</button>
+        <button class="btn btn-sm btn-danger" onclick="${armed ? `adminDeletePerson('${p.id}')` : `armPersonDelete('${p.id}')`}">${armed ? 'Confirm delete?' : 'Delete'}</button>
+      </td>
+    `;
+    body.appendChild(tr);
+  });
+}
+function armPersonDelete(id){
+  peopleDeleteArmed.add(id); renderPeopleAdmin();
+  setTimeout(()=>{ peopleDeleteArmed.delete(id); renderPeopleAdmin(); }, 4000);
+}
+async function adminAddPerson(){
+  const name = document.getElementById('add-person-name').value.trim();
+  const pin = document.getElementById('add-person-pin').value.trim();
+  const role = document.getElementById('add-person-role').value;
+  const msg = document.getElementById('add-person-msg');
+  msg.className = 'msg error';
+  if(!name){ msg.textContent = 'Name is required.'; return; }
+  if(!/^\d{4}$/.test(pin)){ msg.textContent = 'PIN must be exactly 4 digits.'; return; }
+  const { error } = await supabaseClient.rpc('admin_add_person', { p_token: sessionToken, new_name: name, new_pin: pin, new_role: role });
+  if(error){
+    msg.textContent = (error.message && error.message.includes('duplicate')) ? 'That name is already taken.' : 'Could not add person.';
+    return;
+  }
+  msg.className = 'msg success';
+  msg.textContent = `Added ${name} (${role==='admin' ? 'Admin' : 'Field employee'}).`;
+  document.getElementById('add-person-name').value = '';
+  document.getElementById('add-person-pin').value = '';
+  await loadPeopleAdmin();
+}
+function promptResetPin(id, name){
+  const newPin = prompt('New 4-digit PIN for ' + name + ':');
+  if(newPin === null) return;
+  if(!/^\d{4}$/.test(newPin)) return;
+  supabaseClient.rpc('admin_reset_pin', { p_token: sessionToken, target_id: id, new_pin: newPin });
+}
+async function adminDeletePerson(id){
+  peopleDeleteArmed.delete(id);
+  await supabaseClient.rpc('admin_delete_person', { p_token: sessionToken, target_id: id });
+  await loadPeopleAdmin();
+}
+
+/* ---------------- Init ---------------- */
+initLogin();
+</script>
+</body>
+</html>
