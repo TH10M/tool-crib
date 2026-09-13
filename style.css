@@ -219,6 +219,37 @@
   .shelf-unit-card-top{ display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
   .shelf-unit-card-top strong{ font-size:14px; }
 
+  /* ---------- Unassigned tools ---------- */
+  .unassigned-tag{ color:var(--text-dim); font-style:italic; }
+
+  /* ---------- Read-only location display (Add Tool / Edit Tool) ---------- */
+  .location-display{
+    padding:9px 10px; background:var(--panel-raised); border:1px solid var(--line); border-radius:var(--radius);
+    font-size:13px; font-family:var(--mono); color:var(--text);
+  }
+
+  /* ---------- Sortable inventory table headers ---------- */
+  th.sortable{ cursor:pointer; user-select:none; white-space:nowrap; }
+  th.sortable:hover{ color:var(--text); }
+  .sort-arrow{ font-size:9px; color:var(--accent); margin-left:2px; }
+
+  /* ---------- Shelf location picker modal ---------- */
+  .modal.modal-wide{ max-width:820px; }
+  .picker-legend{ display:flex; gap:16px; flex-wrap:wrap; font-size:12px; color:var(--text-dim); margin:10px 0 16px; }
+  .picker-swatch{ display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:5px; vertical-align:-1px; }
+  .picker-swatch.empty{ background:rgba(79,168,163,0.18); border:1px solid var(--ok-dim); }
+  .picker-swatch.occupied{ background:var(--panel-raised); border:1px solid var(--line); }
+  .picker-swatch.current{ background:rgba(232,134,44,0.18); border:1px solid var(--accent); }
+  .picker-slot-row{ display:grid; grid-template-columns:repeat(var(--slot-count,6),1fr); gap:6px; margin-bottom:4px; }
+  .picker-slot{
+    border:1px solid var(--line); border-radius:var(--radius); background:var(--panel);
+    padding:8px 4px; font-family:var(--mono); font-size:10px; text-align:center; color:var(--text-dim);
+  }
+  .picker-slot.empty{ background:rgba(79,168,163,0.1); border-color:var(--ok-dim); color:var(--text); cursor:pointer; }
+  .picker-slot.empty:hover{ background:rgba(79,168,163,0.22); }
+  .picker-slot.occupied{ opacity:0.4; cursor:not-allowed; }
+  .picker-slot.current{ background:rgba(232,134,44,0.18); border-color:var(--accent); color:var(--text); cursor:pointer; font-weight:600; }
+
   /* ---------- Admin ---------- */
   .admin-section{ background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:18px; margin-bottom:18px; }
   .admin-section h3{ font-family:var(--cond); font-size:16px; margin:0 0 14px 0; font-weight:700; }
