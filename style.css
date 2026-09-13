@@ -173,6 +173,7 @@
     align-items:center; justify-content:center; padding:20px; z-index:50;
   }
   .overlay.active{ display:flex; }
+  #confirm-overlay{ z-index:80; background:rgba(10,11,12,0.72); }
   .modal{
     width:100%; max-width:420px; background:var(--panel); border:1px solid var(--line-bright);
     border-radius:var(--radius); padding:22px; max-height:88vh; overflow-y:auto;
@@ -249,6 +250,27 @@
   .picker-slot.empty:hover{ background:rgba(79,168,163,0.22); }
   .picker-slot.occupied{ opacity:0.4; cursor:not-allowed; }
   .picker-slot.current{ background:rgba(232,134,44,0.18); border-color:var(--accent); color:var(--text); cursor:pointer; font-weight:600; }
+
+  /* ---------- No native up/down spinner arrows anywhere ---------- */
+  input[type=number]::-webkit-inner-spin-button,
+  input[type=number]::-webkit-outer-spin-button{ -webkit-appearance:none; margin:0; }
+  input[type=number]{ -moz-appearance:textfield; }
+
+  /* ---------- Bucket location picker section ---------- */
+  .picker-bucket-section{ margin-top:16px; padding-top:14px; border-top:1px dashed var(--line); }
+  .picker-bucket-list{ display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
+
+  /* ---------- Bucket contents (in the bucket detail modal) ---------- */
+  .bucket-contents{ margin-top:16px; padding-top:14px; border-top:1px dashed var(--line); }
+  .bucket-item-row{
+    display:flex; justify-content:space-between; align-items:center; gap:10px;
+    padding:8px 0; border-bottom:1px solid var(--line); font-size:13px;
+  }
+  .bucket-item-row:last-child{ border-bottom:none; }
+  .bucket-item-info{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .bucket-item-actions{ display:flex; align-items:center; gap:6px; }
+  .bucket-item-date{ width:130px; }
+  .slot.bucket-slot .slot-name::before{ content:"🧺 "; }
 
   /* ---------- Admin ---------- */
   .admin-section{ background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:18px; margin-bottom:18px; }
