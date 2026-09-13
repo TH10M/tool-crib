@@ -221,7 +221,7 @@ function renderShelfUnitBody(body, unit, q){
     row.appendChild(label);
     const slotRow = document.createElement('div');
     slotRow.className = 'slot-row';
-    slotRow.style.gridTemplateColumns = `repeat(${lv.slots},1fr)`;
+    slotRow.style.setProperty('--slot-count', lv.slots);
     for(let slot=1; slot<=lv.slots; slot++){
       const tool = tools.find(t => t.side===unit.id && t.level===lv.level && t.slot===slot);
       slotRow.appendChild(buildSlotEl(unit.id, lv.level, slot, tool, q));
@@ -251,6 +251,7 @@ function buildSlotEl(side, level, slot, tool, q){
     label = isOverdue(tool) ? 'Overdue' : 'Checked out';
   }
   el.classList.add('slotstate-'+dotClass);
+  el.title = tool.name + (tool.tag ? ' · '+tool.tag : '') + ' — ' + label;
   el.innerHTML = `
     <div class="slot-code">${code}${tool.tag ? ' · '+tool.tag : ''}</div>
     <div class="slot-name">${escapeHtml(tool.name)}</div>
@@ -593,10 +594,12 @@ function renderShelfLayoutAdmin(){
           <strong>${escapeHtml(unit.label||unit.id)} (${escapeHtml(unit.id)})</strong>
           <button class="btn btn-sm btn-danger" onclick="deleteShelfUnit('${escapeHtml(unit.id)}')">Delete shelf</button>
         </div>
+        <div class="table-scroll">
         <table>
           <thead><tr><th>Level</th><th>Slots</th><th></th></tr></thead>
           <tbody>${rows || '<tr><td colspan="3" style="color:var(--text-dim);">No levels yet.</td></tr>'}</tbody>
         </table>
+        </div>
         <div class="form-grid" style="grid-template-columns:1fr 1fr auto; margin-top:10px;">
           <div class="field"><label>New level #</label><input class="small-input" id="new-level-num-${escapeHtml(unit.id)}" type="number" min="1"></div>
           <div class="field"><label>Slots</label><input class="small-input" id="new-level-slots-${escapeHtml(unit.id)}" type="number" min="1" value="6"></div>
