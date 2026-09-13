@@ -2,7 +2,6 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Tool Crib — GT Field Services</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link rel="stylesheet" href="style.css">
@@ -84,14 +83,12 @@
 
     <!-- Logbook view -->
     <div class="view" id="view-logbook">
-      <div class="table-scroll">
       <table>
         <thead>
           <tr><th>When</th><th>Tool</th><th>Action</th><th>By</th><th>Expected return</th></tr>
         </thead>
         <tbody id="logbook-body"></tbody>
       </table>
-      </div>
       <div class="empty-note" id="logbook-empty" style="display:none;">No activity logged yet.</div>
     </div>
 
@@ -112,12 +109,10 @@
 
       <div class="admin-section">
         <h3>People (<span id="people-count">0</span>)</h3>
-        <div class="table-scroll">
         <table>
           <thead><tr><th>Name</th><th>Role</th><th></th></tr></thead>
           <tbody id="people-body"></tbody>
         </table>
-        </div>
       </div>
 
       <div class="admin-section">
@@ -160,14 +155,12 @@
       <div class="admin-section">
         <h3>Inventory (<span id="inv-count">0</span> tools)</h3>
         <div style="font-size:12px;color:var(--text-dim);margin-bottom:10px;">Price and acquisition date are only ever shown to admins — field employees never see them, even in the app's own data requests.</div>
-        <div class="table-scroll">
         <table>
           <thead>
             <tr><th>Name</th><th>Tag</th><th>Location</th><th>Status</th><th>Price</th><th>Acquired</th><th></th></tr>
           </thead>
           <tbody id="admin-body"></tbody>
         </table>
-        </div>
       </div>
 
       <div class="admin-section">
