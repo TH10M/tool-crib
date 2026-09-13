@@ -150,7 +150,7 @@
   .slot-row{ display:grid; grid-template-columns:repeat(var(--slot-count,6),1fr); gap:6px; }
   .slot{
     border:1px solid var(--line); border-radius:var(--radius); background:var(--panel);
-    padding:7px 6px; height:64px; cursor:default; position:relative;
+    padding:7px 6px; height:78px; overflow:hidden; cursor:default; position:relative;
     display:flex; flex-direction:column; justify-content:space-between; transition:border-color 0.12s, background 0.12s;
   }
   .slot.filled{ cursor:pointer; }
