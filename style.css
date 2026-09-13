@@ -104,10 +104,10 @@
   }
   .role-badge.admin{ color:var(--accent); border-color:var(--accent-dim); }
 
-  nav{ display:flex; gap:2px; padding:0 22px; background:var(--panel); border-bottom:1px solid var(--line); }
+  nav{ display:flex; gap:2px; padding:0 22px; background:var(--panel); border-bottom:1px solid var(--line); overflow-x:auto; -webkit-overflow-scrolling:touch; }
   .tab{
     padding:11px 16px; font-size:13.5px; color:var(--text-dim); cursor:pointer;
-    border-bottom:2px solid transparent; font-family:var(--sans);
+    border-bottom:2px solid transparent; font-family:var(--sans); flex:0 0 auto; white-space:nowrap;
   }
   .tab.active{ color:var(--text); border-bottom-color:var(--accent); }
 
@@ -147,18 +147,21 @@
   }
   .level-row{ margin-bottom:8px; }
   .level-label{ font-family:var(--mono); font-size:10px; color:var(--text-dim); margin-bottom:4px; }
-  .slot-row{ display:grid; grid-template-columns:repeat(6,1fr); gap:6px; }
+  .slot-row{ display:grid; grid-template-columns:repeat(var(--slot-count,6),1fr); gap:6px; }
   .slot{
     border:1px solid var(--line); border-radius:var(--radius); background:var(--panel);
-    padding:7px 6px; min-height:56px; cursor:default; position:relative;
+    padding:7px 6px; height:64px; cursor:default; position:relative;
     display:flex; flex-direction:column; justify-content:space-between; transition:border-color 0.12s, background 0.12s;
   }
   .slot.filled{ cursor:pointer; }
   .slot.filled:hover{ border-color:var(--line-bright); background:var(--panel-raised); }
   .slot.match{ border-color:var(--accent); box-shadow:0 0 0 1px var(--accent) inset; }
   .slot.dimmed{ opacity:0.28; }
-  .slot-code{ font-family:var(--mono); font-size:9.5px; color:var(--text-dim); }
-  .slot-name{ font-size:11px; line-height:1.25; margin-top:2px; }
+  .slot-code{ font-family:var(--mono); font-size:9.5px; color:var(--text-dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .slot-name{
+    font-size:11px; line-height:1.25; margin-top:2px; overflow:hidden;
+    display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;
+  }
   .slot-status{ display:flex; align-items:center; gap:4px; margin-top:4px; }
   .slot-status .dot{ width:6px; height:6px; }
 
@@ -190,6 +193,8 @@
   .modal-note{ font-size:12px; color:var(--text-dim); margin-top:10px; }
 
   /* ---------- Logbook ---------- */
+  .table-scroll{ width:100%; overflow-x:auto; -webkit-overflow-scrolling:touch; }
+  .table-scroll table{ min-width:520px; }
   table{ width:100%; border-collapse:collapse; font-size:13px; }
   th{
     text-align:left; font-family:var(--mono); font-size:10.5px; letter-spacing:0.05em;
@@ -228,3 +233,21 @@
   .msg{ font-size:12.5px; margin-top:10px; }
   .msg.error{ color:var(--danger); }
   .msg.success{ color:var(--ok); }
+
+  /* ---------- Mobile ---------- */
+  @media(max-width:640px){
+    .login-card{ padding:24px 18px; }
+    header{ padding:12px 14px; }
+    .brand-title{ font-size:16px; }
+    nav{ padding:0 14px; }
+    .tab{ padding:10px 12px; font-size:13px; }
+    main{ padding:14px; }
+    .search-row{ flex-wrap:wrap; }
+    .legend{ gap:12px; }
+    .admin-section{ padding:14px; }
+    .form-grid{ grid-template-columns:1fr !important; }
+    .modal{ padding:16px; }
+    /* Let slot rows wrap onto multiple lines instead of squeezing every
+       slot into an unreadably thin column on a narrow screen */
+    .slot-row{ grid-template-columns:repeat(auto-fill,minmax(72px,1fr)); }
+  }
