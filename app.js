@@ -2,6 +2,7 @@
 const SUPABASE_URL = 'https://ivbngscbwesdxcsiczhk.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml2Ym5nc2Nid2VzZHhjc2ljemhrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkxODE1NTAsImV4cCI6MjEwNDc1NzU1MH0.PTfshYaFV3sBuzNelJcCM-XDM_mNdYtAya8NG94BwWw';
 const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const CURRENCY = 'THB'; // one currency, used everywhere prices are shown or entered
 
 /* ---------------- State ---------------- */
 let currentUser = null;   // {id, name, role}
@@ -12,16 +13,30 @@ let pinBuffer = '';
 let peopleDeleteArmed = new Set();
 let tools = [];
 let logbook = [];
+let adminLog = [];
 let activeToolId = null;
 let resetArmed = false;
 let deleteArmed = new Set();
 let pollHandle = null;
 let shelfUnits = [];   // [{id, label, sortOrder, levels:[{level,slots}]}]
 let editToolId = null; // tool currently open in the admin edit modal
+let editToolLocation = null; // {side,level,slot} being edited in that modal (side null = unassigned)
+let addToolLocation = { side:null, level:null, slot:null }; // location chosen in the Add Tool form
+let pickerCallback = null;   // called with (side,level,slot) when a location is picked
+let pickerExcludeId = null;  // a tool id whose own slot shouldn't count as "occupied"
+let pickerCurrent = null;    // {side,level,slot} to highlight as "current location"
+let adminSortKey = 'name';
+let adminSortDir = 'asc';
 
 function todayIso(){ return new Date().toISOString().slice(0,10); }
 function escapeHtml(s){ const d=document.createElement('div'); d.textContent=s||''; return d.innerHTML; }
-function money(n){ return n===null || n===undefined ? '' : Number(n).toLocaleString(undefined,{style:'currency',currency:'USD'}); }
+function money(n){
+  if(n===null || n===undefined || n===''){ return ''; }
+  return Number(n).toLocaleString('en-US', { style:'currency', currency: CURRENCY });
+}
+function locationCode(tool){
+  return tool.side ? `${tool.side}${tool.level}-${tool.slot}` : 'Unassigned';
+}
 
 /* ---------------- DB <-> app mapping (tools come back from list_tools RPC) ---------------- */
 function fromDbTool(r){
@@ -70,7 +85,12 @@ async function loadData(){
   tools = (toolRows || []).map(fromDbTool);
   logbook = (logRows || []).map(fromDbLog);
   shelfUnits = groupShelfLayout(layoutRows);
-  populateAddSideOptions();
+}
+
+async function loadAdminLog(){
+  const { data } = await supabaseClient.rpc('list_admin_log', { p_token: sessionToken });
+  adminLog = data || [];
+  renderAdminLog();
 }
 
 async function refreshAll(){
@@ -79,7 +99,7 @@ async function refreshAll(){
   renderShelves();
   const activeView = document.querySelector('.view.active').id;
   if(activeView === 'view-logbook') renderLogbook();
-  if(activeView === 'view-admin'){ renderAdmin(); await loadPeopleAdmin(); }
+  if(activeView === 'view-admin'){ renderAdmin(); await loadPeopleAdmin(); await loadAdminLog(); }
 }
 
 /* ---------------- Login (name grid + PIN, verified in the database) ---------------- */
@@ -155,7 +175,7 @@ async function enterApp(){
   document.getElementById('tab-admin').style.display = currentUser.role==='admin' ? 'block' : 'none';
   renderShelves();
   renderLogbook();
-  if(currentUser.role==='admin'){ renderAdmin(); await loadPeopleAdmin(); }
+  if(currentUser.role==='admin'){ renderAdmin(); await loadPeopleAdmin(); await loadAdminLog(); }
 
   if(pollHandle) clearInterval(pollHandle);
   pollHandle = setInterval(()=>{ if(!document.getElementById('overlay').classList.contains('active')) refreshAll(); }, 15000);
@@ -178,7 +198,7 @@ function switchTab(view){
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
   document.getElementById('view-'+view).classList.add('active');
   if(view==='logbook') renderLogbook();
-  if(view==='admin'){ renderAdmin(); loadPeopleAdmin(); }
+  if(view==='admin'){ renderAdmin(); loadPeopleAdmin(); loadAdminLog(); }
 }
 
 /* ---------------- Shelf map ---------------- */
@@ -261,22 +281,79 @@ function buildSlotEl(side, level, slot, tool, q){
   return el;
 }
 
-/* ---------------- Add-tool shelf/level dropdowns (dynamic, from shelfUnits) ---------------- */
-function populateAddSideOptions(){
-  const sel = document.getElementById('add-side');
-  if(!sel) return;
-  const prev = sel.value;
-  sel.innerHTML = shelfUnits.map(u=>`<option value="${escapeHtml(u.id)}">${escapeHtml(u.label||u.id)}</option>`).join('');
-  if(shelfUnits.some(u=>u.id===prev)) sel.value = prev;
-  populateAddLevelOptions();
+/* ---------------- Shelf location picker (used by Add Tool and Edit Tool) ---------------- */
+function openLocationPicker(side, level, slot, excludeToolId, callback){
+  pickerCallback = callback;
+  pickerExcludeId = excludeToolId;
+  pickerCurrent = side ? { side, level, slot } : null;
+  renderLocationPicker();
+  document.getElementById('picker-overlay').classList.add('active');
 }
-function populateAddLevelOptions(){
-  const sideSel = document.getElementById('add-side');
-  const levelSel = document.getElementById('add-level');
-  if(!sideSel || !levelSel) return;
-  const unit = shelfUnits.find(u=>u.id===sideSel.value);
-  const levels = unit ? unit.levels.slice().sort((a,b)=>b.level-a.level) : [];
-  levelSel.innerHTML = levels.map(lv=>`<option value="${lv.level}">${lv.level} (${lv.slots} slots)</option>`).join('');
+function closeLocationPicker(){
+  document.getElementById('picker-overlay').classList.remove('active');
+  pickerCallback = null; pickerExcludeId = null; pickerCurrent = null;
+}
+function renderLocationPicker(){
+  const modal = document.getElementById('picker-modal-body');
+  const unitsHtml = shelfUnits.map(unit=>{
+    const levels = unit.levels.slice().sort((a,b)=>b.level-a.level);
+    if(!levels.length) return '';
+    const levelsHtml = levels.map(lv=>{
+      let cells = '';
+      for(let slot=1; slot<=lv.slots; slot++){
+        const occupant = tools.find(t=>t.side===unit.id && t.level===lv.level && t.slot===slot && t.id!==pickerExcludeId);
+        const isCurrent = pickerCurrent && pickerCurrent.side===unit.id && pickerCurrent.level===lv.level && pickerCurrent.slot===slot;
+        const code = unit.id+lv.level+'-'+slot;
+        let cls = 'picker-slot';
+        let title = code;
+        if(isCurrent){ cls += ' current'; title += ' — current location'; }
+        else if(occupant){ cls += ' occupied'; title += ' — occupied by ' + occupant.name; }
+        else { cls += ' empty'; title += ' — empty, click to choose'; }
+        const clickable = isCurrent || !occupant;
+        cells += `<div class="${cls}" title="${escapeHtml(title)}"${clickable ? ` onclick="pickerChoose('${escapeHtml(unit.id)}',${lv.level},${slot})"` : ''}>${code}</div>`;
+      }
+      return `<div class="level-row"><div class="level-label">LEVEL ${lv.level}</div><div class="picker-slot-row" style="--slot-count:${lv.slots};">${cells}</div></div>`;
+    }).join('');
+    return `<div class="shelf-unit-label">${escapeHtml((unit.label||unit.id).toUpperCase())} — UNIT ${escapeHtml(unit.id)}</div>${levelsHtml}`;
+  }).join('');
+
+  modal.innerHTML = `
+    <div class="modal-top">
+      <div class="modal-tag">Shelf location</div>
+      <button class="modal-close" onclick="closeLocationPicker()">✕</button>
+    </div>
+    <div class="modal-title">Pick a slot</div>
+    <div class="picker-legend">
+      <span class="legend-item"><span class="picker-swatch empty"></span> Empty</span>
+      <span class="legend-item"><span class="picker-swatch occupied"></span> Occupied</span>
+      <span class="legend-item"><span class="picker-swatch current"></span> Current</span>
+    </div>
+    ${unitsHtml || '<div class="empty-note">No shelves set up yet — add one in Shelf Layout first.</div>'}
+    <div class="modal-actions">
+      <button class="btn btn-danger btn-full" onclick="pickerUnassign()">Unassign (no shelf location)</button>
+      <button class="btn btn-full" style="margin-top:8px;" onclick="closeLocationPicker()">Cancel</button>
+    </div>
+  `;
+}
+function pickerChoose(side, level, slot){
+  const cb = pickerCallback;
+  closeLocationPicker();
+  if(cb) cb(side, level, slot);
+}
+function pickerUnassign(){
+  const cb = pickerCallback;
+  closeLocationPicker();
+  if(cb) cb(null, null, null);
+}
+
+/* ---------------- Add Tool form: location display ---------------- */
+function setAddLocation(side, level, slot){
+  addToolLocation = { side, level, slot };
+  updateAddLocationDisplay();
+}
+function updateAddLocationDisplay(){
+  const el = document.getElementById('add-location-display');
+  if(el) el.textContent = addToolLocation.side ? `${addToolLocation.side}${addToolLocation.level}-${addToolLocation.slot}` : 'Unassigned';
 }
 
 /* ---------------- Tool modal ---------------- */
@@ -287,7 +364,7 @@ function renderModal(){
   const tool = tools.find(t => t.id===activeToolId);
   if(!tool) return;
   const modal = document.getElementById('modal-body');
-  const code = tool.side + tool.level + '-' + tool.slot;
+  const code = tool.side ? (tool.side + tool.level + '-' + tool.slot) : 'Unassigned';
   const overdue = isOverdue(tool);
 
   let statusHtml, actionHtml = '';
@@ -347,7 +424,7 @@ function renderModal(){
     <div class="modal-title">${escapeHtml(tool.name)}</div>
     ${tool.description ? `<div class="modal-note" style="margin-top:-8px;margin-bottom:12px;">${escapeHtml(tool.description)}</div>` : ''}
     <div class="modal-row"><span>Status</span><span>${statusHtml}</span></div>
-    <div class="modal-row"><span>Shelf location</span><span>Shelf ${tool.side}, level ${tool.level}, slot ${tool.slot}</span></div>
+    <div class="modal-row"><span>Shelf location</span><span>${tool.side ? `Shelf ${tool.side}, level ${tool.level}, slot ${tool.slot}` : '<span class="unassigned-tag">Unassigned</span>'}</span></div>
     ${tool.status==='checked_out' ? `
       <div class="modal-row"><span>Checked out by</span><span>${escapeHtml(tool.checkedOutBy)}</span></div>
       <div class="modal-row"><span>Checked out on</span><span>${tool.checkedOutDate}</span></div>
@@ -414,63 +491,90 @@ function renderLogbook(){
 /* ---------------- Admin: tools ---------------- */
 function renderAdmin(){
   renderShelfLayoutAdmin();
+  renderAdminInventory();
+}
+function toolStatusKey(tool){
+  if(tool.status==='available') return 'available';
+  return isOverdue(tool) ? 'overdue' : 'checked_out';
+}
+function renderAdminInventory(){
   document.getElementById('inv-count').textContent = tools.length;
+  const q = (document.getElementById('inv-search')?.value || '').trim().toLowerCase();
+  const statusFilter = document.getElementById('inv-status-filter')?.value || 'all';
+
+  let filtered = tools.filter(t=>{
+    if(q){
+      const hay = (t.name + ' ' + (t.tag||'') + ' ' + (t.description||'')).toLowerCase();
+      if(!hay.includes(q)) return false;
+    }
+    if(statusFilter==='unassigned') return !t.side;
+    if(statusFilter!=='all' && toolStatusKey(t)!==statusFilter) return false;
+    return true;
+  });
+
+  filtered.sort((a,b)=>{
+    let av, bv;
+    switch(adminSortKey){
+      case 'tag': av=(a.tag||'').toLowerCase(); bv=(b.tag||'').toLowerCase(); break;
+      case 'location': av=locationCode(a).toLowerCase(); bv=locationCode(b).toLowerCase(); break;
+      case 'status': av=toolStatusKey(a); bv=toolStatusKey(b); break;
+      case 'price': av=(a.price===null||a.price===undefined)?-Infinity:a.price; bv=(b.price===null||b.price===undefined)?-Infinity:b.price; break;
+      case 'acquired': av=a.acquiredDate||''; bv=b.acquiredDate||''; break;
+      case 'name': default: av=a.name.toLowerCase(); bv=b.name.toLowerCase();
+    }
+    if(av<bv) return adminSortDir==='asc' ? -1 : 1;
+    if(av>bv) return adminSortDir==='asc' ? 1 : -1;
+    return 0;
+  });
+
+  document.querySelectorAll('.sort-arrow').forEach(el=>el.textContent='');
+  const activeArrow = document.getElementById('sort-arrow-'+adminSortKey);
+  if(activeArrow) activeArrow.textContent = adminSortDir==='asc' ? ' ▲' : ' ▼';
+
   const body = document.getElementById('admin-body');
   body.innerHTML = '';
-  tools.slice().sort((a,b)=>a.name.localeCompare(b.name)).forEach(tool => {
+  if(!filtered.length){
+    body.innerHTML = '<tr><td colspan="7" style="color:var(--text-dim);text-align:center;padding:20px;">No tools match your search/filter.</td></tr>';
+    return;
+  }
+  filtered.forEach(tool => {
     const tr = document.createElement('tr');
-    const code = tool.side + tool.level + '-' + tool.slot;
-    const statusLabel = tool.status==='available' ? 'Available' : ('Out — ' + tool.checkedOutBy);
+    const statusLabel = tool.status==='available' ? 'Available' : (isOverdue(tool) ? 'Overdue — '+tool.checkedOutBy : 'Out — ' + tool.checkedOutBy);
     const armed = deleteArmed.has(tool.id);
+    const loc = tool.side ? locationCode(tool) : '<span class="unassigned-tag">Unassigned</span>';
     tr.innerHTML = `
       <td>${escapeHtml(tool.name)}</td>
       <td>${tool.tag || '—'}</td>
-      <td>${code}</td>
+      <td>${loc}</td>
       <td>${statusLabel}</td>
       <td>${money(tool.price) || '—'}</td>
       <td>${tool.acquiredDate || '—'}</td>
       <td class="admin-row-actions">
         <button class="btn btn-sm" onclick="openEditTool('${tool.id}')">Edit</button>
-        <button class="btn btn-sm" onclick="editLocation('${tool.id}')">Move</button>
         <button class="btn btn-sm btn-danger" onclick="${armed ? `deleteToolConfirm('${tool.id}')` : `armDelete('${tool.id}')`}">${armed ? 'Confirm delete?' : 'Delete'}</button>
       </td>
     `;
     body.appendChild(tr);
   });
 }
+function sortAdminInv(key){
+  if(adminSortKey===key){ adminSortDir = adminSortDir==='asc' ? 'desc' : 'asc'; }
+  else { adminSortKey = key; adminSortDir = 'asc'; }
+  renderAdminInventory();
+}
 function armDelete(id){
-  deleteArmed.add(id); renderAdmin();
-  setTimeout(()=>{ deleteArmed.delete(id); renderAdmin(); }, 4000);
+  deleteArmed.add(id); renderAdminInventory();
+  setTimeout(()=>{ deleteArmed.delete(id); renderAdminInventory(); }, 4000);
 }
 async function deleteToolConfirm(id){
   deleteArmed.delete(id);
   await supabaseClient.rpc('admin_delete_tool', { p_token: sessionToken, p_tool_id: id });
   await loadData();
-  renderAdmin(); renderShelves();
-}
-async function editLocation(id){
-  const tool = tools.find(t=>t.id===id);
-  const newSide = prompt('Shelf side (L or R):', tool.side);
-  if(newSide===null) return;
-  const newLevel = prompt('Level (1-4):', tool.level);
-  if(newLevel===null) return;
-  const newSlot = prompt('Slot (1-6):', tool.slot);
-  if(newSlot===null) return;
-  const side = newSide.trim().toUpperCase();
-  const level = parseInt(newLevel,10), slot = parseInt(newSlot,10);
-  if(!['L','R'].includes(side) || ![1,2,3,4].includes(level) || slot<1 || slot>6) return;
-  const occupied = tools.find(t=>t.id!==id && t.side===side && t.level===level && t.slot===slot);
-  if(occupied) return;
-  await supabaseClient.rpc('admin_move_tool', { p_token: sessionToken, p_tool_id: id, p_side: side, p_level: level, p_slot: slot });
-  await loadData();
-  renderAdmin(); renderShelves();
+  renderAdmin(); renderShelves(); loadAdminLog();
 }
 async function adminAddTool(){
   const name = document.getElementById('add-name').value.trim();
   const tag = document.getElementById('add-tag').value.trim();
-  const side = document.getElementById('add-side').value;
-  const level = parseInt(document.getElementById('add-level').value,10);
-  const slot = parseInt(document.getElementById('add-slot').value,10);
   const description = document.getElementById('add-description').value.trim();
   const priceRaw = document.getElementById('add-price').value.trim();
   const price = priceRaw === '' ? null : parseFloat(priceRaw);
@@ -479,23 +583,26 @@ async function adminAddTool(){
   const msg = document.getElementById('add-msg');
   msg.className = 'msg error';
   if(!name){ msg.textContent = 'Tool name is required.'; return; }
-  if(!side || !level){ msg.textContent = 'Set up a shelf and level first (Shelf Layout section above).'; return; }
-  const unit = shelfUnits.find(u=>u.id===side);
-  const lvInfo = unit && unit.levels.find(l=>l.level===level);
-  const maxSlots = lvInfo ? lvInfo.slots : 0;
-  if(!slot || slot<1 || slot>maxSlots){ msg.textContent = `Slot must be between 1 and ${maxSlots} for that level.`; return; }
-  const occupied = tools.find(t=>t.side===side && t.level===level && t.slot===slot);
-  if(occupied){ msg.textContent = `Slot ${side}${level}-${slot} is already used by "${occupied.name}".`; return; }
+  const { side, level, slot } = addToolLocation;
+  if(side){
+    const occupied = tools.find(t=>t.side===side && t.level===level && t.slot===slot);
+    if(occupied){ msg.textContent = `Slot ${side}${level}-${slot} is already used by "${occupied.name}".`; return; }
+  }
   const { error } = await supabaseClient.rpc('admin_add_tool', {
     p_token: sessionToken, p_name: name, p_tag: tag, p_side: side, p_level: level, p_slot: slot,
     p_description: description, p_price: price, p_acquired_date: acquired, p_photo_url: photoUrl
   });
-  if(error){ msg.textContent = 'Could not add tool.'; return; }
+  if(error){
+    msg.textContent = (error.message||'').includes('occupied') ? 'That slot was just taken — choose another location.' : 'Could not add tool.';
+    return;
+  }
   msg.className = 'msg success';
-  msg.textContent = `Added "${name}" at ${side}${level}-${slot}.`;
-  ['add-name','add-tag','add-slot','add-description','add-price','add-acquired','add-photo'].forEach(id=>document.getElementById(id).value='');
+  msg.textContent = `Added "${name}"${side ? ' at '+side+level+'-'+slot : ' (unassigned)'}.`;
+  ['add-name','add-tag','add-description','add-price','add-acquired','add-photo'].forEach(id=>document.getElementById(id).value='');
+  addToolLocation = { side:null, level:null, slot:null };
+  updateAddLocationDisplay();
   await loadData();
-  renderAdmin(); renderShelves();
+  renderAdmin(); renderShelves(); loadAdminLog();
 }
 function confirmReset(){
   const btn = document.getElementById('reset-btn');
@@ -512,33 +619,53 @@ function confirmReset(){
 async function doReset(){
   await supabaseClient.rpc('admin_reset_demo', { p_token: sessionToken });
   await loadData();
-  renderAdmin(); renderShelves(); renderLogbook();
+  renderAdmin(); renderShelves(); renderLogbook(); loadAdminLog();
 }
 
-/* ---------------- Admin: edit tool (name/tag/description/price/date/photo) ---------------- */
+/* ---------------- Admin: edit tool (the one and only edit action — name/tag/description/price/date/photo/location) ---------------- */
 function openEditTool(id){
   editToolId = id;
+  const tool = tools.find(t=>t.id===id);
+  editToolLocation = tool ? { side: tool.side, level: tool.level, slot: tool.slot } : { side:null, level:null, slot:null };
   renderEditModal();
   document.getElementById('edit-overlay').classList.add('active');
 }
 function closeEditModal(){
   document.getElementById('edit-overlay').classList.remove('active');
   editToolId = null;
+  editToolLocation = null;
+}
+function pickEditLocation(){
+  openLocationPicker(editToolLocation.side, editToolLocation.level, editToolLocation.slot, editToolId, (side,level,slot)=>{
+    editToolLocation = { side, level, slot };
+    updateEditLocationDisplay();
+  });
+}
+function updateEditLocationDisplay(){
+  const el = document.getElementById('edit-location-display');
+  if(el) el.textContent = editToolLocation.side ? `${editToolLocation.side}${editToolLocation.level}-${editToolLocation.slot}` : 'Unassigned';
 }
 function renderEditModal(){
   const tool = tools.find(t=>t.id===editToolId);
   if(!tool) return;
   const modal = document.getElementById('edit-modal-body');
+  const locCode = tool.side ? `${tool.side}${tool.level}-${tool.slot}` : 'Unassigned';
   modal.innerHTML = `
     <div class="modal-top">
-      <div class="modal-tag">Editing · ${tool.side}${tool.level}-${tool.slot}</div>
+      <div class="modal-tag">Editing · ${locCode}</div>
       <button class="modal-close" onclick="closeEditModal()">✕</button>
     </div>
     <div class="modal-title">Edit tool</div>
     <div class="field"><label>Name</label><input class="small-input" id="edit-name" type="text" value="${escapeHtml(tool.name)}"></div>
     <div class="field"><label>Tag #</label><input class="small-input" id="edit-tag" type="text" value="${escapeHtml(tool.tag)}"></div>
+    <div class="field"><label>Shelf location</label>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <div class="location-display" id="edit-location-display" style="flex:1;">${locCode}</div>
+        <button class="btn btn-sm" onclick="pickEditLocation()">Change</button>
+      </div>
+    </div>
     <div class="field"><label>Description</label><input class="small-input" id="edit-description" type="text" value="${escapeHtml(tool.description)}"></div>
-    <div class="field"><label>Price</label><input class="small-input" id="edit-price" type="number" step="0.01" value="${tool.price!==null && tool.price!==undefined ? tool.price : ''}"></div>
+    <div class="field"><label>Price (THB)</label><input class="small-input" id="edit-price" type="number" step="0.01" value="${tool.price!==null && tool.price!==undefined ? tool.price : ''}"></div>
     <div class="field"><label>Acquired date</label><input class="small-input" id="edit-acquired" type="date" value="${tool.acquiredDate||''}"></div>
     <div class="field"><label>Photo URL</label><input class="small-input" id="edit-photo" type="text" value="${escapeHtml(tool.photoUrl)}" placeholder="https://…"></div>
     ${tool.photoUrl ? `<img class="tool-photo" src="${escapeHtml(tool.photoUrl)}" alt="">` : ''}
@@ -558,13 +685,18 @@ async function adminUpdateTool(){
   const photoUrl = document.getElementById('edit-photo').value.trim();
   const msg = document.getElementById('edit-msg');
   if(!name){ msg.textContent = 'Tool name is required.'; return; }
+  const { side, level, slot } = editToolLocation;
   const { error } = await supabaseClient.rpc('admin_update_tool', {
     p_token: sessionToken, p_tool_id: editToolId, p_name: name, p_tag: tag,
-    p_description: description, p_price: price, p_acquired_date: acquired, p_photo_url: photoUrl
+    p_description: description, p_price: price, p_acquired_date: acquired, p_photo_url: photoUrl,
+    p_side: side, p_level: level, p_slot: slot
   });
-  if(error){ msg.textContent = 'Could not save changes.'; return; }
+  if(error){
+    msg.textContent = (error.message||'').includes('occupied') ? 'That slot is already used by another tool.' : 'Could not save changes.';
+    return;
+  }
   await loadData();
-  renderAdmin(); renderShelves();
+  renderAdmin(); renderShelves(); loadAdminLog();
   closeEditModal();
 }
 
@@ -623,7 +755,7 @@ async function adminAddShelfUnit(){
   document.getElementById('add-unit-id').value = '';
   document.getElementById('add-unit-label').value = '';
   await loadData();
-  renderShelfLayoutAdmin(); renderShelves();
+  renderShelfLayoutAdmin(); renderShelves(); loadAdminLog();
 }
 async function adminAddShelfLevel(unitId){
   const num = parseInt(document.getElementById('new-level-num-'+unitId).value, 10);
@@ -631,7 +763,7 @@ async function adminAddShelfLevel(unitId){
   if(!num || num<1 || !slots || slots<1){ alert('Enter a valid level number and slot count.'); return; }
   await supabaseClient.rpc('admin_set_shelf_level', { p_token: sessionToken, p_unit_id: unitId, p_level: num, p_slots: slots });
   await loadData();
-  renderShelfLayoutAdmin(); renderShelves();
+  renderShelfLayoutAdmin(); renderShelves(); loadAdminLog();
 }
 async function editShelfLevelSlots(unitId, level, currentSlots){
   const val = prompt(`Slots on ${unitId} level ${level}:`, currentSlots);
@@ -640,21 +772,35 @@ async function editShelfLevelSlots(unitId, level, currentSlots){
   if(!slots || slots<1) return;
   await supabaseClient.rpc('admin_set_shelf_level', { p_token: sessionToken, p_unit_id: unitId, p_level: level, p_slots: slots });
   await loadData();
-  renderShelfLayoutAdmin(); renderShelves();
+  renderShelfLayoutAdmin(); renderShelves(); loadAdminLog();
 }
 async function deleteShelfLevel(unitId, level){
-  if(!confirm(`Delete level ${level} on shelf ${unitId}? This only works if no tools are on it.`)) return;
+  const affected = tools.filter(t=>t.side===unitId && t.level===level);
+  const confirmMsg = affected.length
+    ? `Level ${level} on shelf ${unitId} has ${affected.length} tool(s) on it:\n\n${affected.map(t=>'• '+t.name).join('\n')}\n\nDeleting this level will UNASSIGN these tools — they'll stay in inventory with no shelf location. Continue?`
+    : `Delete level ${level} on shelf ${unitId}?`;
+  if(!confirm(confirmMsg)) return;
   const { error } = await supabaseClient.rpc('admin_delete_shelf_level', { p_token: sessionToken, p_unit_id: unitId, p_level: level });
-  if(error){ alert('Could not delete: that level still has tools on it. Move or delete them first.'); return; }
+  if(error){ alert('Could not delete that level.'); return; }
   await loadData();
-  renderShelfLayoutAdmin(); renderShelves();
+  renderShelfLayoutAdmin(); renderShelves(); renderAdminInventory(); loadAdminLog();
+  if(affected.length){
+    alert(`Unassigned ${affected.length} tool(s) — find them in Inventory filtered by "Unassigned location":\n\n${affected.map(t=>'• '+t.name).join('\n')}`);
+  }
 }
 async function deleteShelfUnit(unitId){
-  if(!confirm(`Delete shelf ${unitId} entirely? This only works if no tools are on it.`)) return;
+  const affected = tools.filter(t=>t.side===unitId);
+  const confirmMsg = affected.length
+    ? `Shelf ${unitId} has ${affected.length} tool(s) on it:\n\n${affected.map(t=>'• '+t.name).join('\n')}\n\nDeleting this shelf will UNASSIGN these tools — they'll stay in inventory with no shelf location. Continue?`
+    : `Delete shelf ${unitId} entirely?`;
+  if(!confirm(confirmMsg)) return;
   const { error } = await supabaseClient.rpc('admin_delete_shelf_unit', { p_token: sessionToken, p_unit_id: unitId });
-  if(error){ alert('Could not delete: that shelf still has tools on it. Move or delete them first.'); return; }
+  if(error){ alert('Could not delete that shelf.'); return; }
   await loadData();
-  renderShelfLayoutAdmin(); renderShelves();
+  renderShelfLayoutAdmin(); renderShelves(); renderAdminInventory(); loadAdminLog();
+  if(affected.length){
+    alert(`Unassigned ${affected.length} tool(s) — find them in Inventory filtered by "Unassigned location":\n\n${affected.map(t=>'• '+t.name).join('\n')}`);
+  }
 }
 
 /* ---------------- Admin: people ---------------- */
@@ -703,17 +849,40 @@ async function adminAddPerson(){
   document.getElementById('add-person-name').value = '';
   document.getElementById('add-person-pin').value = '';
   await loadPeopleAdmin();
+  loadAdminLog();
 }
 function promptResetPin(id, name){
   const newPin = prompt('New 4-digit PIN for ' + name + ':');
   if(newPin === null) return;
   if(!/^\d{4}$/.test(newPin)) return;
-  supabaseClient.rpc('admin_reset_pin', { p_token: sessionToken, target_id: id, new_pin: newPin });
+  supabaseClient.rpc('admin_reset_pin', { p_token: sessionToken, target_id: id, new_pin: newPin }).then(()=>loadAdminLog());
 }
 async function adminDeletePerson(id){
   peopleDeleteArmed.delete(id);
   await supabaseClient.rpc('admin_delete_person', { p_token: sessionToken, target_id: id });
   await loadPeopleAdmin();
+  loadAdminLog();
+}
+
+/* ---------------- Admin: activity log (admin-only, read via list_admin_log) ---------------- */
+function renderAdminLog(){
+  const body = document.getElementById('admin-log-body');
+  if(!body) return;
+  body.innerHTML = '';
+  const emptyEl = document.getElementById('admin-log-empty');
+  if(emptyEl) emptyEl.style.display = adminLog.length ? 'none' : 'block';
+  adminLog.forEach(entry=>{
+    const tr = document.createElement('tr');
+    const when = new Date(entry.created_at);
+    const whenStr = isNaN(when) ? entry.created_at : when.toLocaleString();
+    tr.innerHTML = `
+      <td>${whenStr}</td>
+      <td>${escapeHtml(entry.actor_name)}</td>
+      <td>${escapeHtml(entry.action)}</td>
+      <td>${escapeHtml(entry.details||'')}</td>
+    `;
+    body.appendChild(tr);
+  });
 }
 
 /* ---------------- Init ---------------- */
