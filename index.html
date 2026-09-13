@@ -99,22 +99,36 @@
     <div class="view" id="view-admin">
       <div class="admin-section">
         <h3>Add a person</h3>
-        <div class="form-grid" style="grid-template-columns:2fr 1fr 1fr auto;">
+        <div class="form-grid" style="grid-template-columns:2fr 1fr 1fr;">
           <div class="field"><label>Name</label><input class="small-input" id="add-person-name" type="text"></div>
           <div class="field"><label>4-digit PIN</label><input class="small-input" id="add-person-pin" type="text" maxlength="4" inputmode="numeric" placeholder="e.g. 4821"></div>
           <div class="field"><label>Role</label>
             <select class="small-input" id="add-person-role"><option value="employee">Field employee</option><option value="admin">Admin</option></select>
           </div>
-          <button class="btn btn-primary btn-sm" onclick="adminAddPerson()">Add</button>
         </div>
+        <div class="form-grid" style="grid-template-columns:1fr 1fr; margin-top:10px;">
+          <div class="field"><label>Phone (optional)</label><input class="small-input" id="add-person-phone" type="text" placeholder="e.g. 081-234-5678"></div>
+          <div class="field"><label>Email (optional)</label><input class="small-input" id="add-person-email" type="email" placeholder="name@company.com"></div>
+        </div>
+        <button class="btn btn-primary btn-sm" style="margin-top:8px;" onclick="adminAddPerson(this)">Add person</button>
         <div class="msg" id="add-person-msg"></div>
       </div>
 
       <div class="admin-section">
         <h3>People (<span id="people-count">0</span>)</h3>
+        <div style="font-size:12px;color:var(--text-dim);margin-bottom:10px;">Phone, email, and "added" date are visible to admins only.</div>
         <div class="table-scroll">
         <table>
-          <thead><tr><th>Name</th><th>Role</th><th></th></tr></thead>
+          <thead>
+            <tr>
+              <th class="sortable" onclick="sortAdminPeople('name')">Name<span class="sort-arrow" id="people-sort-arrow-name"></span></th>
+              <th class="sortable" onclick="sortAdminPeople('role')">Role<span class="sort-arrow" id="people-sort-arrow-role"></span></th>
+              <th class="sortable" onclick="sortAdminPeople('phone')">Phone<span class="sort-arrow" id="people-sort-arrow-phone"></span></th>
+              <th class="sortable" onclick="sortAdminPeople('email')">Email<span class="sort-arrow" id="people-sort-arrow-email"></span></th>
+              <th class="sortable" onclick="sortAdminPeople('added')">Added<span class="sort-arrow" id="people-sort-arrow-added"></span></th>
+              <th></th>
+            </tr>
+          </thead>
           <tbody id="people-body"></tbody>
         </table>
         </div>
@@ -122,33 +136,39 @@
 
       <div class="admin-section">
         <h3>Shelf Layout</h3>
-        <div style="font-size:12px;color:var(--text-dim);margin-bottom:14px;">Add shelf units, and set how many levels and slots each one has. Changes apply immediately on the Shelf Map for everyone.</div>
-        <div class="form-grid" style="grid-template-columns:1fr 2fr auto;">
-          <div class="field"><label>Shelf ID (short code)</label><input class="small-input" id="add-unit-id" type="text" maxlength="8" placeholder="e.g. R2"></div>
-          <div class="field"><label>Label</label><input class="small-input" id="add-unit-label" type="text" placeholder="e.g. Right Shelf 2"></div>
-          <button class="btn btn-primary btn-sm" onclick="adminAddShelfUnit()">Add shelf</button>
-        </div>
-        <div class="msg" id="add-unit-msg"></div>
+        <div style="font-size:12px;color:var(--text-dim);margin-bottom:14px;">Add a shelf, then use its editor to name it and set up levels and slots. Changes apply immediately on the Shelf Map for everyone.</div>
+        <button class="btn btn-primary btn-sm" onclick="createAndEditShelf(this)">+ Add shelf</button>
         <div id="shelf-layout-body" style="margin-top:16px;"></div>
       </div>
 
       <div class="admin-section">
         <h3>Add a tool</h3>
-        <div class="form-grid" style="grid-template-columns:2fr 1fr auto auto;">
+        <div class="form-grid" style="grid-template-columns:2fr 1fr 1fr;">
           <div class="field"><label>Name</label><input class="small-input" id="add-name" type="text"></div>
           <div class="field"><label>Tag # (optional)</label><input class="small-input" id="add-tag" type="text"></div>
+          <div class="field"><label>Type</label>
+            <select class="small-input" id="add-kind" onchange="onAddKindChange()">
+              <option value="tool">Tool</option>
+              <option value="bucket">Bucket (holds other tools)</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-grid" style="grid-template-columns:1fr auto; margin-top:10px;">
           <div class="field"><label>Shelf location</label><div class="location-display" id="add-location-display">Unassigned</div></div>
-          <button class="btn btn-sm" onclick="openLocationPicker(null,null,null,null,setAddLocation)">Choose location</button>
+          <button class="btn btn-sm" onclick="openAddLocationPicker()">Choose location</button>
         </div>
         <div class="form-grid" style="grid-template-columns:2fr 1fr 1fr; margin-top:10px;">
           <div class="field"><label>Description (optional)</label><input class="small-input" id="add-description" type="text" placeholder="e.g. calibrated annually, serial #..."></div>
-          <div class="field"><label>Price (THB, optional)</label><input class="small-input" id="add-price" type="number" step="0.01" placeholder="e.g. 12500"></div>
+          <div class="field" id="add-price-field"><label>Price</label><input class="small-input" id="add-price" type="number" step="0.01" placeholder="e.g. 12500"></div>
+          <div class="field" id="add-currency-field"><label>Currency</label>
+            <select class="small-input" id="add-currency"><option value="THB">THB</option><option value="USD">USD</option><option value="SGD">SGD</option></select>
+          </div>
+        </div>
+        <div class="form-grid" style="grid-template-columns:1fr 1fr; margin-top:10px;">
           <div class="field"><label>Acquired date (optional)</label><input class="small-input" id="add-acquired" type="date"></div>
+          <div class="field"><label>Photo URL (optional)</label><input class="small-input" id="add-photo" type="text" placeholder="https://…"></div>
         </div>
-        <div class="form-grid" style="grid-template-columns:1fr; margin-top:10px;">
-          <div class="field"><label>Photo URL (optional)</label><input class="small-input" id="add-photo" type="text" placeholder="https://…  (paste a link to an image)"></div>
-        </div>
-        <button class="btn btn-primary btn-sm" style="margin-top:6px;" onclick="adminAddTool()">Add tool</button>
+        <button class="btn btn-primary btn-sm" style="margin-top:6px;" onclick="adminAddTool(this)">Add tool</button>
         <div class="msg" id="add-msg"></div>
       </div>
 
@@ -164,6 +184,7 @@
               <option value="checked_out">Checked out</option>
               <option value="overdue">Overdue</option>
               <option value="unassigned">Unassigned location</option>
+              <option value="in_bucket">In a bucket</option>
             </select>
           </div>
         </div>
@@ -175,7 +196,7 @@
               <th class="sortable" onclick="sortAdminInv('tag')">Tag<span class="sort-arrow" id="sort-arrow-tag"></span></th>
               <th class="sortable" onclick="sortAdminInv('location')">Location<span class="sort-arrow" id="sort-arrow-location"></span></th>
               <th class="sortable" onclick="sortAdminInv('status')">Status<span class="sort-arrow" id="sort-arrow-status"></span></th>
-              <th class="sortable" onclick="sortAdminInv('price')">Price (THB)<span class="sort-arrow" id="sort-arrow-price"></span></th>
+              <th class="sortable" onclick="sortAdminInv('price')">Price<span class="sort-arrow" id="sort-arrow-price"></span></th>
               <th class="sortable" onclick="sortAdminInv('acquired')">Acquired<span class="sort-arrow" id="sort-arrow-acquired"></span></th>
               <th></th>
             </tr>
@@ -183,6 +204,18 @@
           <tbody id="admin-body"></tbody>
         </table>
         </div>
+      </div>
+
+      <div class="admin-section">
+        <h3>Recently Deleted</h3>
+        <div style="font-size:12px;color:var(--text-dim);margin-bottom:10px;">Deleted tools stay here so a mistaken delete can be undone.</div>
+        <div class="table-scroll">
+        <table>
+          <thead><tr><th>Name</th><th>Tag</th><th>Was at</th><th>Deleted</th><th></th></tr></thead>
+          <tbody id="deleted-body"></tbody>
+        </table>
+        </div>
+        <div class="empty-note" id="deleted-empty" style="display:none;">Nothing deleted recently.</div>
       </div>
 
       <div class="admin-section">
@@ -219,6 +252,21 @@
 <!-- ===================== ADMIN: SHELF LOCATION PICKER ===================== -->
 <div class="overlay" id="picker-overlay">
   <div class="modal modal-wide" id="picker-modal-body"></div>
+</div>
+
+<!-- ===================== ADMIN: INTERACTIVE SHELF EDITOR ===================== -->
+<div class="overlay" id="shelf-editor-overlay">
+  <div class="modal modal-wide" id="shelf-editor-modal-body"></div>
+</div>
+
+<!-- ===================== ADMIN: EDIT PERSON ===================== -->
+<div class="overlay" id="person-edit-overlay">
+  <div class="modal" id="person-edit-modal-body"></div>
+</div>
+
+<!-- ===================== SHARED: CONFIRM / NOTICE MODAL (replaces native confirm/alert/prompt) ===================== -->
+<div class="overlay" id="confirm-overlay">
+  <div class="modal" id="confirm-modal-body"></div>
 </div>
 
 <script src="app.js"></script>
