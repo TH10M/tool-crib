@@ -884,7 +884,7 @@ async function adminAddTool(btn){
       p_photo_url: photoUrl, p_currency: currency, p_kind: kind, p_bucket_id: bucketId
     });
     if(error){
-      msg.textContent = (error.message||'').includes('occupied') ? 'That slot was just taken — choose another location.' : 'Could not add tool.';
+      msg.textContent = (error.message||'').includes('occupied') ? 'That slot was just taken — choose another location.' : ('Could not add tool: ' + (error.message || 'unknown error'));
       return;
     }
     msg.className = 'msg success';
@@ -1004,7 +1004,7 @@ async function adminUpdateTool(btn){
       p_side: side, p_level: level, p_slot: slot, p_currency: currency, p_bucket_id: bucketId
     });
     if(error){
-      msg.textContent = (error.message||'').includes('occupied') ? 'That slot is already used by another tool.' : 'Could not save changes.';
+      msg.textContent = (error.message||'').includes('occupied') ? 'That slot is already used by another tool.' : ('Could not save changes: ' + (error.message || 'unknown error'));
       return;
     }
     await loadData();
@@ -1346,7 +1346,7 @@ async function adminUpdatePerson(btn){
     const { error } = await supabaseClient.rpc('admin_update_person', {
       p_token: sessionToken, target_id: editPersonId, new_name: name, new_phone: phone, new_email: email
     });
-    if(error){ msg.textContent = 'Could not save changes.'; return; }
+    if(error){ msg.textContent = 'Could not save changes: ' + (error.message || 'unknown error'); return; }
     await loadPeopleAdmin();
     loadAdminLog();
     closeEditPersonModal();
